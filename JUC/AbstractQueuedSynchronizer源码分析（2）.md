@@ -44,8 +44,7 @@ static final class FairSync extends Sync {
     }
     // AbstractQueuedSynchronizer.acquire(int arg)
     public final void acquire(int arg) {
-        if (!tryAcquire(arg) &&
-            acquireQueued(addWaiter(Node.EXCLUSIVE), arg))
+        if (!tryAcquire(arg) && acquireQueued(addWaiter(Node.EXCLUSIVE), arg))
             selfInterrupt();
     }
     protected final boolean tryAcquire(int acquires) {
@@ -84,8 +83,7 @@ static final class NonfairSync extends Sync {
     }
     // AbstractQueuedSynchronizer.acquire(int arg)
     public final void acquire(int arg) {
-        if (!tryAcquire(arg) &&
-            acquireQueued(addWaiter(Node.EXCLUSIVE), arg))
+        if (!tryAcquire(arg) && acquireQueued(addWaiter(Node.EXCLUSIVE), arg))
             selfInterrupt();
     }
     protected final boolean tryAcquire(int acquires) {
@@ -432,7 +430,7 @@ private boolean findNodeFromTail(Node node) {
 
 ## signal()方法分析
 
-### 4. 唤醒线程，转移到阻塞队列
+### 4. 转移到阻塞队列，唤醒线程
 
 为了大家理解，这里我们先看唤醒操作，因为刚刚到 `LockSupport.park(this);` 把线程挂起了，等待唤醒。
 
@@ -488,9 +486,10 @@ final boolean transferForSignal(Node node) {
 }
 ```
 
-正常情况下，`ws > 0 || !compareAndSetWaitStatus(p, ws, Node.SIGNAL)` 这句中，ws <= 0，而且 `compareAndSetWaitStatus(p, ws, Node.SIGNAL)` 会返回 true，所以一般也不会进去 if 语句块中唤醒 node 对应的线程。然后这个方法返回 true，也就意味着 signal 方法结束了，节点进入了阻塞队列。
+正常情况下 ws <= 0，而且 `compareAndSetWaitStatus(p, ws, Node.SIGNAL)` 会返回 true，所以`if (ws > 0 || !compareAndSetWaitStatus(p, ws, Node.SIGNAL))`，有两种情况：
 
-**假设发生了阻塞队列中的前驱节点取消等待，或者 CAS 失败，只要唤醒线程，让其进到下一步即可。**
+- **一般不会进去 if 语句**块中唤醒 node 对应的线程。然后这个方法返回 true，也就意味着 signal 方法结束了，节点进入了阻塞队列；
+- 假设发生了阻塞队列中的**前驱节点取消等待 或者 CAS 失败**，只要唤醒线程，让其进到下一步即可。
 
 ### 5. 唤醒后检查中断状态
 
@@ -511,8 +510,8 @@ while (!isOnSyncQueue(node)) {
 
 先解释下 interruptMode。interruptMode 可以取值为 REINTERRUPT（1），THROW_IE（-1），0
 
-- REINTERRUPT： 代表 await 返回的时候，需要重新设置中断状态
-- THROW_IE： 代表 await 返回的时候，需要抛出 InterruptedException 异常
+- REINTERRUPT： 代表 await 返回的时候，需要重新设置中断状态（在signal之后发生中断）
+- THROW_IE： 代表 await 返回的时候，需要抛出 InterruptedException 异常（在signal之前发生了中断）
 - 0 ：说明在 await 期间，没有发生中断
 
 有以下三种情况会让 LockSupport.park(this); 这句返回继续往下执行：
@@ -530,8 +529,7 @@ while (!isOnSyncQueue(node)) {
 // 3. 没有发生中断，返回 0
 private int checkInterruptWhileWaiting(Node node) {
     return Thread.interrupted() ?
-        (transferAfterCancelledWait(node) ? THROW_IE : REINTERRUPT) :
-        0;
+        (transferAfterCancelledWait(node) ? THROW_IE : REINTERRUPT) : 0;
 }
 ```
 
@@ -719,8 +717,7 @@ final boolean acquireQueued(final Node node, int arg) {
                 failed = false;
                 return interrupted;
             }
-            if (shouldParkAfterFailedAcquire(p, node) &&
-                parkAndCheckInterrupt())
+            if (shouldParkAfterFailedAcquire(p, node) && parkAndCheckInterrupt())
                 interrupted = true;
         }
     } finally {
@@ -753,8 +750,7 @@ private final boolean parkAndCheckInterrupt() {
 
 ```java
 public final void acquire(int arg) {
-    if (!tryAcquire(arg) &&
-        acquireQueued(addWaiter(Node.EXCLUSIVE), arg))
+    if (!tryAcquire(arg) && acquireQueued(addWaiter(Node.EXCLUSIVE), arg))
         selfInterrupt();
 }
 static void selfInterrupt() {
@@ -779,8 +775,7 @@ public void lockInterruptibly() throws InterruptedException {
 方法上多了个 `throws InterruptedException` ，经过前面那么多知识的铺垫，这里我就不再啰里啰嗦了。
 
 ```java
-public final void acquireInterruptibly(int arg)
-        throws InterruptedException {
+public final void acquireInterruptibly(int arg) throws InterruptedException {
     if (Thread.interrupted())
         throw new InterruptedException();
     if (!tryAcquire(arg))
@@ -803,8 +798,7 @@ private void doAcquireInterruptibly(int arg) throws InterruptedException {
                 failed = false;
                 return;
             }
-            if (shouldParkAfterFailedAcquire(p, node) &&
-                parkAndCheckInterrupt())
+            if (shouldParkAfterFailedAcquire(p, node) && parkAndCheckInterrupt())
                 // 就是这里了，一旦异常，马上结束这个方法，抛出异常。
                 // 这里不再只是标记这个方法的返回值代表中断状态
                 // 而是直接抛出异常，而且外层也不捕获，一直往外抛到 lockInterruptibly
@@ -827,7 +821,7 @@ private void cancelAcquire(Node node) {
         return;
     node.thread = null;
     // Skip cancelled predecessors
-    // 找一个合适的前驱。其实就是将它前面的队列中已经取消的节点都”请出去“
+    // 找一个合适的前驱。其实就是将它前面的队列中已经取消的节点都“请出去”
     Node pred = node.prev;
     while (pred.waitStatus > 0)
         node.prev = pred = pred.prev;
@@ -846,10 +840,9 @@ private void cancelAcquire(Node node) {
         // If successor needs signal, try to set pred's next-link
         // so it will get one. Otherwise wake it up to propagate.
         int ws;
-        if (pred != head &&
-            ((ws = pred.waitStatus) == Node.SIGNAL ||
-             (ws <= 0 && compareAndSetWaitStatus(pred, ws, Node.SIGNAL))) &&
-            pred.thread != null) {
+        if (pred != head && ((ws = pred.waitStatus) == Node.SIGNAL ||
+             (ws <= 0 && compareAndSetWaitStatus(pred, ws, Node.SIGNAL))) && pred.thread != null)
+        {
             Node next = node.next;
             if (next != null && next.waitStatus <= 0)
                 compareAndSetNext(pred, predNext, next);
@@ -921,7 +914,7 @@ while (!Thread.interrupted()) {
 
 对于以上 3 种情况是最特殊的，因为他们能自动感知到中断（这里说自动，当然也是基于底层实现），**并且在做出相应的操作后都会重置中断状态为 false**。
 
-那是不是只有以上 3 种方法能自动感知到中断呢？不是的，如果线程阻塞在 LockSupport.park(Object obj) 方法，也叫挂起，这个时候的中断也会导致线程唤醒，但是唤醒后不会重置中断状态，所以唤醒后去检测中断状态将是 true。
+那是不是只有以上 3 种方法能自动感知到中断呢？不是的，**如果线程阻塞在 LockSupport.park(Object obj) 方法**，也叫挂起，这个时候的**中断也会导致线程唤醒**，但是唤醒后不会重置中断状态，所以唤醒后去检测中断状态将是 true。
 
 ### InterruptedException 概述
 
@@ -966,11 +959,10 @@ public void lockInterruptibly() throws InterruptedException {
 
 ```java
 public final void acquire(int arg) {
-    if (!tryAcquire(arg) &&
-        acquireQueued(addWaiter(Node.EXCLUSIVE), arg))
+    if (!tryAcquire(arg) && acquireQueued(addWaiter(Node.EXCLUSIVE), arg))
         // 我们看到，这里也没做任何特殊处理，就是记录下来中断状态。
         // 这样，如果外层方法需要去检测的时候，至少我们没有把这个信息丢了
-        selfInterrupt();// Thread.currentThread().interrupt();
+        selfInterrupt(); // Thread.currentThread().interrupt();
 }
 ```
 
