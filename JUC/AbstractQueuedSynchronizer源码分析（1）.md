@@ -260,7 +260,6 @@ static final class FairSync extends Sync {
                 // 还是一步CAS，你懂的，现在可能是很多线程同时进来呢
                 if (compareAndSetHead(new Node()))
                     // 给后面用：这个时候head节点的waitStatus==0, 看new Node()构造方法就知道了
-                  
                     // 这个时候有了head，但是tail还是null，设置一下，
                     // 把tail指向head，放心，马上就有线程要来了，到时候tail就要被抢了
                     // 注意：这里只是设置了tail=head，这里可没return哦，没有return，没有return

@@ -174,6 +174,8 @@ public void bind() throws Exception {
     serverSock.socket().bind(addr,getAcceptCount());
     
     // ※※※ 设置 ServerSocketChannel 为阻塞模式 ※※※
+    // Tomcat 的做法应该是在告诉我们，这里即使将 ServerSocketChannel 设置为非阻塞也不会有什么提高性
+    // 能的作用。Tomcat的实现：阻塞 + selector
     serverSock.configureBlocking(true);
 
     // 设置 acceptor 和 poller 的数量，至于它们是什么角色，待会说
@@ -471,7 +473,7 @@ protected boolean setSocketOptions(SocketChannel socket) {
 }
 ```
 
-我们看到，这里又没有进行实际的处理，而是将这个 SocketChannel **注册**到了其中一个 poller 上。因为我们知道，acceptor 应该尽可能的简单，只做 accept 的工作，简单处理下就往后面扔。acceptor 还得回到之前的循环去 accept 新的连接呢。
+我们看到，这里又没有进行实际的处理，而是将这个 SocketChannel **注册** 到了其中一个 poller 上。因为我们知道，acceptor 应该尽可能的简单，只做 accept 的工作，简单处理下就往后面扔。acceptor 还得回到之前的循环去 accept 新的连接呢。
 
 我们只需要明白，此时，往 poller 中注册了一个 NioChannel 实例，此实例包含客户端过来的 SocketChannel 和一个 SocketBufferHandler 实例。
 

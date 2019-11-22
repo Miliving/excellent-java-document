@@ -59,7 +59,7 @@ Netty 作为 NIO 的库，自然既可以作为服务端接受请求，也可以
 
 > 左边是服务端代码，右边是客户端代码。
 
-上面的代码基本就是模板代码，每次使用都是这一个套路，唯一需要我们开发的部分是 handler(…) 和 childHandler(…) 方法中指定的各个 handler，如 **EchoServerHandler** 和 **EchoClientHandler**，当然 Netty 源码也给我们提供了很多的 handler，比如上面的 LoggingHandler，它就是 Netty 源码中为我们提供的，需要的时候直接拿过来用就好了。
+上面的代码基本就是模板代码，每次使用都是这一个套路，**唯一**需要我们开发的部分是 **handler(…) 和 childHandler(…)** 方法中指定的各个 handler，如 **EchoServerHandler** 和 **EchoClientHandler**，当然 Netty 源码也给我们提供了很多的 handler，比如上面的 LoggingHandler，它就是 Netty 源码中为我们提供的，需要的时候直接拿过来用就好了。
 
 我们先来看一下上述代码中涉及到的一些内容：
 
@@ -969,14 +969,14 @@ protected MultithreadEventExecutorGroup(int nThreads, ThreadFactory threadFactor
 > ```java
 > public final class ThreadPerTaskExecutor implements Executor {
 >     private final ThreadFactory threadFactory;
-> 
+>
 >     public ThreadPerTaskExecutor(ThreadFactory threadFactory) {
 >         if (threadFactory == null) {
 >             throw new NullPointerException("threadFactory");
 >         }
 >         this.threadFactory = threadFactory;
 >     }
-> 
+>
 >     @Override
 >     public void execute(Runnable command) {
 >         // 为每个任务新建一个线程

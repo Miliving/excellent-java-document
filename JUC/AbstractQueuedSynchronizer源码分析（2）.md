@@ -122,7 +122,7 @@ final boolean nonfairTryAcquire(int acquires) {
 1. 非公平锁在调用 lock 后，首先就会调用 CAS 进行一次抢锁，如果这个时候恰巧锁没有被占用，那么直接就获取到锁返回了。
 2. 非公平锁在 CAS 失败后，和公平锁一样都会进入到 tryAcquire 方法，在 tryAcquire 方法中，如果发现锁这个时候被释放了（state == 0），非公平锁会直接 CAS 抢锁，但是公平锁会判断等待队列是否有线程处于等待状态，如果有则不去抢锁，乖乖排到后面。
 
-公平锁和非公平锁就这两点区别，如果这两次 CAS 都不成功，那么后面非公平锁和公平锁是一样的，都要进入到阻塞队列等待唤醒。
+公平锁和非公平锁就这两点区别：**如果这两次 CAS 都不成功，那么后面非公平锁和公平锁是一样的，都要进入到阻塞队列等待唤醒。**
 
 相对来说，非公平锁会有更好的性能，因为它的吞吐量比较大。当然，非公平锁让获取锁的时间变得更加不确定，可能会导致在阻塞队列中的线程长期处于饥饿状态。
 
@@ -153,7 +153,8 @@ class BoundedBuffer {
             while (count == items.length)
                 notFull.await();  // 队列已满，等待，直到 not full 才能继续生产
             items[putptr] = x;
-            if (++putptr == items.length) putptr = 0;
+            if (++putptr == items.length) 
+              	putptr = 0;
             ++count;
             notEmpty.signal(); // 生产成功，队列已经 not empty 了，发个通知出去
         } finally {
@@ -168,7 +169,8 @@ class BoundedBuffer {
             while (count == 0)
                 notEmpty.await(); // 队列为空，等待，直到队列 not empty，才能继续消费
             Object x = items[takeptr];
-            if (++takeptr == items.length) takeptr = 0;
+            if (++takeptr == items.length)
+              	takeptr = 0;
             --count;
             notFull.signal(); // 被我消费掉一个，队列 not full 了，发个通知出去
             return x;
@@ -179,13 +181,13 @@ class BoundedBuffer {
 }
 ```
 
-> 1、我们可以看到，在使用 condition 时，必须先持有相应的锁。这个和 Object 类中的方法有相似的语义，需要先持有某个对象的监视器锁才可以执行 wait(), notify() 或 notifyAll() 方法。
+> 1、我们可以看到，在使用 condition 时，必须先持有相应的锁。这个和 Object 类中的方法有相似的语义，需要先**持有某个对象的监视器锁**才可以执行 wait(), notify() 或 notifyAll() 方法。
 >
 > 2、ArrayBlockingQueue 采用这种方式实现了生产者-消费者，所以请只把这个例子当做学习例子，实际生产中可以直接使用 ArrayBlockingQueue
 
 我们常用 obj.wait()，obj.notify() 或 obj.notifyAll() 来实现相似的功能，但是，它们是基于对象的监视器锁的。需要深入了解这几个方法的读者，可以参考我的另一篇文章《[深入分析 java 8 编程语言规范：Threads and Locks](http://hongjiev.github.io/2017/07/05/Threads-And-Locks-md/)》。而这里说的 Condition 是基于 ReentrantLock 实现的，而 ReentrantLock 是依赖于 AbstractQueuedSynchronizer 实现的。
 
-在往下看之前，读者心里要有一个整体的概念。condition 是依赖于 ReentrantLock  的，不管是调用 await 进入等待还是 signal 唤醒，**都必须获取到锁才能进行操作**。
+在往下看之前，读者心里要有一个整体的概念。condition 是依赖于 ReentrantLock  的，不管是调用 await 进入等待还是 signal 唤醒，**都必须获取到锁**才能进行操作。
 
 每个 ReentrantLock  实例可以通过调用多次 newCondition 产生多个 ConditionObject 的实例：
 
@@ -229,14 +231,16 @@ Node nextWaiter;
 
 1. 条件队列和阻塞队列的节点，都是 Node 的实例，因为条件队列的节点是需要转移到阻塞队列中去的；
 2. 我们知道一个 ReentrantLock 实例可以通过多次调用 newCondition() 来产生多个 Condition 实例，这里对应 condition1 和 condition2。注意，ConditionObject 只有两个属性 firstWaiter 和 lastWaiter；
-3. 每个 condition 有一个关联的**条件队列**，如线程 1 调用 `condition1.await()` 方法即可将当前线程 1 包装成 Node 后加入到条件队列中，然后阻塞在这里，不继续往下执行，条件队列是一个单向链表；
-4. 调用` condition1.signal()` 触发一次唤醒，此时唤醒的是队头，会将condition1 对应的**条件队列**的 firstWaiter（队头） 移到**阻塞队列的队尾**，等待获取锁，获取锁后 await 方法才能返回，继续往下执行。
+3. 每个 condition 有一个关联的 **条件队列**，如线程 1 调用 `condition1.await()` 方法即可将当前线程 1 包装成 Node 后加入到条件队列中，然后阻塞在这里，不继续往下执行，条件队列是一个单向链表；
+4. 调用` condition1.signal()` 触发一次唤醒，此时唤醒的是队头，会将condition1 对应的 **条件队列** 的 firstWaiter（队头） 移到 **阻塞队列的队尾**，等待获取锁，获取锁后 await 方法才能返回，继续往下执行。
 
 上面的 2->3->4 描述了一个最简单的流程，没有考虑中断、signalAll、还有带有超时参数的 await 方法等，不过把这里弄懂是这节的主要目的。
 
 同时，从图中也可以很直观地看出，哪些操作是线程安全的，哪些操作是线程不安全的。 
 
 这个图看懂后，下面的代码分析就简单了。
+
+## await()方法分析
 
 接下来，我们一步步按照流程来走代码分析，我们先来看看 wait 方法：
 
@@ -276,7 +280,7 @@ public final void await() throws InterruptedException {
 
 其实，我大体上也把整个 await 过程说得十之八九了，下面我们分步把上面的几个点用源码说清楚。
 
-###  1. 将节点加入到条件队列
+###  1. 将节点加入到条件队列移除取消节点
 
 addConditionWaiter() 是将当前节点加入到条件队列，看图我们知道，这种条件队列内的操作是线程安全的。
 
@@ -289,7 +293,7 @@ private Node addConditionWaiter() {
     if (t != null && t.waitStatus != Node.CONDITION) {
         // 这个方法会遍历整个条件队列，然后会将已取消的所有节点清除出队列
         unlinkCancelledWaiters();
-        t = lastWaiter;
+        t = lastWaiter; // 移除了一遍之后需要重新赋值
     }
     // node 在初始化的时候，指定 waitStatus 为 Node.CONDITION
     Node node = new Node(Thread.currentThread(), Node.CONDITION);
@@ -306,7 +310,7 @@ private Node addConditionWaiter() {
 ```
 上面的这块代码很简单，就是将当前线程进入到条件队列的队尾。
 
-在addWaiter 方法中，有一个 unlinkCancelledWaiters() 方法，该方法用于清除队列中已经取消等待的节点。
+在addWaiter 方法中，有一个 unlinkCancelledWaiters() 方法，该方法用于**清除队列中已经取消等待的节点**。
 
 当 await 的时候如果发生了取消操作（这点之后会说），或者是在节点入队的时候，发现最后一个节点是被取消的，会调用一次这个方法。
 
@@ -352,6 +356,7 @@ final int fullyRelease(Node node) {
     try {
         int savedState = getState();
         // 这里使用了当前的 state 作为 release 的参数，也就是完全释放掉锁，将 state 置为 0
+        // 将锁释放掉，移除AQS中的取消的节点，并且唤醒了队列中第一个阻塞线程
         if (release(savedState)) {
             failed = false;
             return savedState;
@@ -369,7 +374,7 @@ final int fullyRelease(Node node) {
 
 ### 3. 等待进入阻塞队列
 
-释放掉锁以后，接下来是这段，这边会自旋，如果发现自己还没到阻塞队列，那么挂起，等待被转移到阻塞队列。
+释放掉锁以后，接下来是这段，这边会自旋，如果发现自己还没进入阻塞队列，那么挂起，等待被转移到阻塞队列。
 
 ```java
 int interruptMode = 0;
@@ -423,9 +428,11 @@ private boolean findNodeFromTail(Node node) {
 }
 ```
 
-回到前面的循环，isOnSyncQueue(node) 返回 false 的话，那么进到 `LockSupport.park(this); ` 这里线程挂起。
+回到前面的循环，isOnSyncQueue(node) 返回 false 的话（当前节点不在阻塞队列中），那么进到 `LockSupport.park(this); ` 这里线程挂起。
 
-### 4. signal 唤醒线程，转移到阻塞队列
+## signal()方法分析
+
+### 4. 唤醒线程，转移到阻塞队列
 
 为了大家理解，这里我们先看唤醒操作，因为刚刚到 `LockSupport.park(this);` 把线程挂起了，等待唤醒。
 
@@ -433,7 +440,7 @@ private boolean findNodeFromTail(Node node) {
 
 ```java
 // 唤醒等待了最久的线程
-// 其实就是，将这个线程对应的 node 从条件队列转移到阻塞队列
+// 其实就是：将这个线程对应的 node 从条件队列转移到阻塞队列
 public final void signal() {
     // 调用 signal 方法的线程必须持有当前的独占锁
     if (!isHeldExclusively())
@@ -453,8 +460,7 @@ private void doSignal(Node first) {
             lastWaiter = null;
         // 因为 first 马上要被移到阻塞队列了，和条件队列的链接关系在这里断掉
         first.nextWaiter = null;
-    } while (!transferForSignal(first) &&
-             (first = firstWaiter) != null);
+    } while (!transferForSignal(first) && (first = firstWaiter) != null);
       // 这里 while 循环，如果 first 转移不成功，那么选择 first 后面的第一个节点进行转移，依此类推
 }
 
@@ -484,7 +490,7 @@ final boolean transferForSignal(Node node) {
 
 正常情况下，`ws > 0 || !compareAndSetWaitStatus(p, ws, Node.SIGNAL)` 这句中，ws <= 0，而且 `compareAndSetWaitStatus(p, ws, Node.SIGNAL)` 会返回 true，所以一般也不会进去 if 语句块中唤醒 node 对应的线程。然后这个方法返回 true，也就意味着 signal 方法结束了，节点进入了阻塞队列。
 
-假设发生了阻塞队列中的前驱节点取消等待，或者 CAS 失败，只要唤醒线程，让其进到下一步即可。
+**假设发生了阻塞队列中的前驱节点取消等待，或者 CAS 失败，只要唤醒线程，让其进到下一步即可。**
 
 ### 5. 唤醒后检查中断状态
 
@@ -497,7 +503,7 @@ int interruptMode = 0;
 while (!isOnSyncQueue(node)) {
     // 线程挂起
     LockSupport.park(this);
-    
+
     if ((interruptMode = checkInterruptWhileWaiting(node)) != 0)
         break;
 }

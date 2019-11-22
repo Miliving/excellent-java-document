@@ -16,7 +16,7 @@ categories:
 
 ## Buffer
 
-一个 Buffer 本质上是内存中的一块，我们可以将数据写入这块内存，之后从这块内存获取数据。
+一个 Buffer 本质上是内存中的一块连续区域，我们可以将数据写入这块内存，之后从这块内存获取数据。
 
 java.nio 定义了以下几个 Buffer 的实现，这个图读者应该也在不少地方见过了吧。
 
@@ -24,7 +24,7 @@ java.nio 定义了以下几个 Buffer 的实现，这个图读者应该也在不
 
 其实核心是最后的 **ByteBuffer**，前面的一大串类只是包装了一下它而已，我们使用最多的通常也是 ByteBuffer。
 
-我们应该将 Buffer 理解为一个数组，IntBuffer、CharBuffer、DoubleBuffer 等分别对应 int[]、char[]、double[] 等。
+我们应该将 Buffer 理解为一个**数组**，IntBuffer、CharBuffer、DoubleBuffer 等分别对应 int[]、char[]、double[] 等。
 
 MappedByteBuffer 用于实现内存映射文件，也不是本文关注的重点。
 
@@ -196,7 +196,7 @@ public final Buffer clear() {
 - SocketChannel：把它理解为 TCP 连接通道，简单理解就是 TCP 客户端
 - ServerSocketChannel：TCP 对应的服务端，用于监听某个端口进来的请求
 
-**这里不是很理解这些也没关系，后面介绍了代码之后就清晰了。还有，我们最应该关注，也是后面将会重点介绍的是 SocketChannel 和 ServerSocketChannel。**
+这里不是很理解这些也没关系，后面介绍了之后就清晰了。还有，我们最应该关注，也是后面将会重点介绍的是 **SocketChannel 和 ServerSocketChannel**。
 
 Channel 经常翻译为通道，类似 IO 中的流，用于读取和写入。它与前面介绍的 Buffer 打交道，读操作的时候将 Channel 中的数据填充到 Buffer 中，而写操作时将 Buffer 中的数据写入到 Channel 中。
 
@@ -208,9 +208,9 @@ Channel 经常翻译为通道，类似 IO 中的流，用于读取和写入。�
 
 ### FileChannel
 
-我想文件操作对于大家来说应该是最熟悉的，不过我们在说 NIO 的时候，其实 FileChannel 并不是关注的重点。而且后面我们说非阻塞的时候会看到，FileChannel 是不支持非阻塞的。
+我想文件操作对于大家来说应该是最熟悉的，不过我们在说 NIO 的时候，其实 FileChannel 并不是关注的重点。而且后面我们说非阻塞的时候会看到，FileChannel 是**不支持非阻塞**的。
 
-**这里算是简单介绍下常用的操作吧，感兴趣的读者瞄一眼就是了。**
+这里算是简单介绍下常用的操作吧，感兴趣的读者瞄一眼就是了。
 
 **初始化：**
 
@@ -335,7 +335,7 @@ int bytesSent = channel.send(buf, new InetSocketAddress("jenkov.com", 80));
 
 ## Selector
 
-NIO 三大组件就剩 Selector 了，Selector 建立在非阻塞的基础之上，大家经常听到的 **多路复用** 在 Java 世界中指的就是它，用于实现一个线程管理多个 Channel。
+NIO 三大组件就剩 Selector 了，Selector **建立在非阻塞的基础之上**，大家经常听到的 **多路复用** 在 Java 世界中指的就是它，用于实现一个线程管理多个 Channel。
 
 读者在这一节不能消化 Selector 也没关系，因为后续在介绍非阻塞 IO 的时候还得说到这个，这里先介绍一些基本的接口操作。
 
@@ -376,7 +376,7 @@ NIO 三大组件就剩 Selector 了，Selector 建立在非阻塞的基础之上
 
    注册方法返回值是 **SelectionKey** 实例，它包含了 Channel 和 Selector 信息，也包括了一个叫做 Interest Set 的信息，即我们设置的我们感兴趣的正在监听的事件集合。
 
-3. 调用 select() 方法获取通道信息。用于判断是否有我们感兴趣的事件已经发生了。
+3. 调用 **select()** 方法 **获取通道上的信息（事件）**，用于判断是否有我们感兴趣的事件已经发生了。
 
 Selector 的操作就是以上 3 步，这里来一个简单的示例，大家看一下就好了。之后在介绍非阻塞 IO 的时候，会演示一份可执行的示例代码。
 
@@ -420,11 +420,12 @@ while(true) {
 
 1. **select()**
 
-  调用此方法，会将**上次 select 之后的**准备好的 channel 对应的 SelectionKey 复制到 selected set 中。如果没有任何通道准备好，这个方法会阻塞，直到至少有一个通道准备好。
+   调用此方法，会将**上次 select 之后的**准备好的 channel 对应的 SelectionKey 复制到 selected set 中。如果没有任何通道准备好，这个方法会阻塞，直到至少有一个通道准备好
+
 
 2. **selectNow()**
 
-   功能和 select 一样，区别在于如果没有准备好的通道，那么此方法会立即返回 0。
+   功能和 select 一样，区别在于如果没有准备好的通道，那么此方法会立即返回 0
 
 3. **select(long timeout)**
 
@@ -432,7 +433,7 @@ while(true) {
 
 4. **wakeup()**
 
-   这个方法是用来唤醒等待在 select() 和 select(timeout) 上的线程的。如果 wakeup() 先被调用，此时没有线程在 select 上阻塞，那么之后的一个 select() 或 select(timeout) 会立即返回，而不会阻塞，当然，它只会作用一次。
+   这个方法是用来唤醒等待在 select() 和 select(timeout) 上的线程的。如果 wakeup() 先被调用，此时没有线程在 select 上阻塞，那么之后的一个 select() 或 select(timeout) 会立即返回，而不会阻塞，当然，它只会作用一次
 
 ## 小结
 
