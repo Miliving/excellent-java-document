@@ -30,7 +30,7 @@ CountDownLatch 这个类是比较典型的 AQS 的共享模式的使用，这是
 调用 latch.await() 的方法的线程会阻塞，直到所有的任务完成。
 
 ```java
-class Driver2 { // ...
+class Driver2 {
     void main() throws InterruptedException {
         CountDownLatch doneSignal = new CountDownLatch(N);
         Executor e = Executors.newFixedThreadPool(8);
@@ -40,7 +40,7 @@ class Driver2 { // ...
             e.execute(new WorkerRunnable(doneSignal, i));
 
         // 等待所有的任务完成，这个方法才会返回
-        doneSignal.await();           // wait for all to finish
+        doneSignal.await(); // wait for all to finish
     }
 }
 
@@ -52,7 +52,7 @@ class WorkerRunnable implements Runnable {
         this.doneSignal = doneSignal;
         this.i = i;
     }
-
+	@Override
     public void run() {
         try {
             doWork(i);
@@ -71,7 +71,7 @@ class WorkerRunnable implements Runnable {
 我们再来看另一个例子，这个例子很典型，用了两个 CountDownLatch：
 
 ```java
-class Driver { // ...
+class Driver {
     void main() throws InterruptedException {
         CountDownLatch startSignal = new CountDownLatch(1);
         CountDownLatch doneSignal = new CountDownLatch(N);
@@ -97,7 +97,7 @@ class Worker implements Runnable {
         this.startSignal = startSignal;
         this.doneSignal = doneSignal;
     }
-
+	@Override
     public void run() {
         try {
             // 为了让所有线程同时开始任务，我们让所有线程先阻塞在这里
@@ -125,13 +125,12 @@ class Worker implements Runnable {
 
 ### 源码分析
 
-Talk is cheap, show me the code.
-
 构造方法，需要传入一个不小于 0 的整数：
 
 ```java
 public CountDownLatch(int count) {
-    if (count < 0) throw new IllegalArgumentException("count < 0");
+    if (count < 0) 
+      	 throw new IllegalArgumentException("count < 0");
     this.sync = new Sync(count);
 }
 // 老套路了，内部封装一个 Sync 类继承自 AQS
@@ -237,8 +236,7 @@ public class CountDownLatchDemo {
 public void await() throws InterruptedException {
     sync.acquireSharedInterruptibly(1);
 }
-public final void acquireSharedInterruptibly(int arg)
-        throws InterruptedException {
+public final void acquireSharedInterruptibly(int arg) throws InterruptedException {
     // 这也是老套路了，我在第二篇的中断那一节说过了
     if (Thread.interrupted())
         throw new InterruptedException();
@@ -257,8 +255,7 @@ protected int tryAcquireShared(int acquires) {
 从方法名我们就可以看出，这个方法是获取共享锁，并且此方法是可中断的（中断的时候抛出 InterruptedException 退出这个方法）。
 
 ```java
-private void doAcquireSharedInterruptibly(int arg)
-    throws InterruptedException {
+private void doAcquireSharedInterruptibly(int arg) throws InterruptedException {
     // 1. 入队
     final Node node = addWaiter(Node.SHARED);
     boolean failed = true;
@@ -276,8 +273,7 @@ private void doAcquireSharedInterruptibly(int arg)
                 }
             }
             // 2
-            if (shouldParkAfterFailedAcquire(p, node) &&
-                parkAndCheckInterrupt())
+            if (shouldParkAfterFailedAcquire(p, node) && parkAndCheckInterrupt())
                 throw new InterruptedException();
         }
     } finally {
@@ -318,7 +314,7 @@ public void countDown() {
 public final boolean releaseShared(int arg) {
     // 只有当 state 减为 0 的时候，tryReleaseShared 才返回 true
     // 否则只是简单的 state = state - 1 那么 countDown() 方法就结束了
-    //    将 state 减到 0 的那个操作才是最复杂的，继续往下吧
+    // 将 state 减到 0 的那个操作才是最复杂的，继续往下吧
     if (tryReleaseShared(arg)) {
         // 唤醒 await 的线程
         doReleaseShared();
@@ -358,8 +354,7 @@ private void doReleaseShared() {
                 // 在这里，也就是唤醒 t3
                 unparkSuccessor(h);
             }
-            else if (ws == 0 &&
-                     !compareAndSetWaitStatus(h, 0, Node.PROPAGATE)) // todo
+            else if (ws == 0 && !compareAndSetWaitStatus(h, 0, Node.PROPAGATE)) // todo
                 continue;                // loop on failed CAS
         }
         if (h == head)                   // loop if head changed
@@ -371,8 +366,7 @@ private void doReleaseShared() {
 一旦 t3 被唤醒后，我们继续回到 await 的这段代码，parkAndCheckInterrupt 返回，我们先不考虑中断的情况：
 
 ```java
-private void doAcquireSharedInterruptibly(int arg)
-    throws InterruptedException {
+private void doAcquireSharedInterruptibly(int arg) throws InterruptedException {
     final Node node = addWaiter(Node.SHARED);
     boolean failed = true;
     try {
@@ -387,9 +381,8 @@ private void doAcquireSharedInterruptibly(int arg)
                     return;
                 }
             }
-            if (shouldParkAfterFailedAcquire(p, node) &&
-                // 1. 唤醒后这个方法返回
-                parkAndCheckInterrupt())
+            // 1. 唤醒后 parkAndCheckInterrupt() 方法返回
+            if (shouldParkAfterFailedAcquire(p, node) && parkAndCheckInterrupt())
                 throw new InterruptedException();
         }
     } finally {
@@ -408,8 +401,7 @@ private void setHeadAndPropagate(Node node, int propagate) {
   
     // 下面说的是，唤醒当前 node 之后的节点，即 t3 已经醒了，马上唤醒 t4
     // 类似的，如果 t4 后面还有 t5，那么 t4 醒了以后，马上将 t5 给唤醒了
-    if (propagate > 0 || h == null || h.waitStatus < 0 ||
-        (h = head) == null || h.waitStatus < 0) {
+    if (propagate>0 || h==null || h.waitStatus<0 || (h=head) == null || h.waitStatus<0) {
         Node s = node.next;
         if (s == null || s.isShared())
             // 又是这个方法，只是现在的 head 已经不是原来的空节点了，是 t3 的节点了
@@ -426,8 +418,8 @@ private void doReleaseShared() {
     for (;;) {
         Node h = head;
         // 1. h == null: 说明阻塞队列为空
-        // 2. h == tail: 说明头结点可能是刚刚初始化的头节点，
-        //   或者是普通线程节点，但是此节点既然是头节点了，那么代表已经被唤醒了，阻塞队列没有其他节点了
+        // 2. h == tail: 说明头结点可能是刚刚初始化的头节点，或者是普通线程节点，
+        // 但是此节点既然是头节点了，那么代表已经被唤醒了，阻塞队列没有其他节点了
         // 所以这两种情况不需要进行唤醒后继节点
         if (h != null && h != tail) {
             int ws = h.waitStatus;
@@ -440,9 +432,8 @@ private void doReleaseShared() {
                 // 在这里，也就是唤醒 t4
                 unparkSuccessor(h);
             }
-            else if (ws == 0 &&
-                     // 这个 CAS 失败的场景是：执行到这里的时候，刚好有一个节点入队，入队会将这个 ws 设置为 -1
-                     !compareAndSetWaitStatus(h, 0, Node.PROPAGATE))
+            // 这个 CAS 失败的场景是：执行到这里的时候，刚好有一个节点入队，入队会将这个 ws 设置为 -1
+            else if (ws == 0 && !compareAndSetWaitStatus(h, 0, Node.PROPAGATE))
                 continue;                // loop on failed CAS
         }
         // 如果到这里的时候，前面唤醒的线程已经占领了 head，那么再循环
@@ -465,7 +456,7 @@ private void doReleaseShared() {
 
 for 循环第一轮的时候会唤醒 t4，t4 醒后会将自己设置为头节点，如果在 t4 设置头节点后，for 循环才跑到 if (h == head)，那么此时会返回 false，for 循环会进入下一轮。t4 唤醒后也会进入到这个方法里面，那么 for 循环第二轮和 t4 就有可能在这个 CAS 相遇，那么就只会有一个成功了。
 
-
+// TODO：上面这段完全不懂！！
 
 ## CyclicBarrier
 
@@ -477,7 +468,7 @@ for 循环第一轮的时候会唤醒 t4，t4 醒后会将自己设置为头节�
 
 因为 CyclicBarrier 的源码相对来说简单许多，读者只要熟悉了前面关于 Condition 的分析，那么这里的源码是毫无压力的，就是几个特殊概念罢了。
 
-先用一张图来描绘下 CyclicBarrier 里面的一些概念，和它的基本使用流程：
+先用一张图来描绘下 CyclicBarrier 里面的一些概念和它的基本使用流程：
 
 ![cyclicbarrier-3](https://www.javadoop.com/blogimages/AbstractQueuedSynchronizer-3/cyclicbarrier-3.png)
 
@@ -513,7 +504,8 @@ public class CyclicBarrier {
     private int count;
   
     public CyclicBarrier(int parties, Runnable barrierAction) {
-        if (parties <= 0) throw new IllegalArgumentException();
+        if (parties <= 0) 
+          	throw new IllegalArgumentException();
         this.parties = parties;
         this.count = parties;
         this.barrierCommand = barrierAction;
@@ -566,9 +558,7 @@ public int await() throws InterruptedException, BrokenBarrierException {
 }
 // 带超时机制，如果超时抛出 TimeoutException 异常
 public int await(long timeout, TimeUnit unit)
-    throws InterruptedException,
-           BrokenBarrierException,
-           TimeoutException {
+    throws InterruptedException,BrokenBarrierException,TimeoutException {
     return dowait(true, unit.toNanos(timeout));
 }
 ```
@@ -577,8 +567,8 @@ public int await(long timeout, TimeUnit unit)
 
 ```java
 private int dowait(boolean timed, long nanos)
-        throws InterruptedException, BrokenBarrierException,
-               TimeoutException {
+        throws InterruptedException, BrokenBarrierException, TimeoutException 
+{
     final ReentrantLock lock = this.lock;
     // 先要获取到锁，然后在 finally 中要记得释放锁
     // 如果记得 Condition 部分的话，我们知道 condition 的 await() 会释放锁，被 signal() 唤醒的时候需要重新获取锁
@@ -730,7 +720,7 @@ public void reset() {
 
 ## Semaphore
 
-有了 CountDownLatch 的基础后，分析 Semaphore 会简单很多。Semaphore 是什么呢？它类似一个资源池（读者可以类比线程池），每个线程需要调用 acquire() 方法获取资源，然后才能执行，执行完后，需要 release 资源，让给其他的线程用。
+有了 CountDownLatch 的基础后，分析 Semaphore 会简单很多。Semaphore 是什么呢？它类似一个**资源池**（读者可以**类比线程池**），每个线程需要调用 acquire() 方法获取资源，然后才能执行，执行完后，需要 release 资源，让给其他的线程用。
 
 大概大家也可以猜到，Semaphore 其实也是 AQS 中共享锁的使用，因为每个线程共享一个池嘛。
 
@@ -846,8 +836,7 @@ private void doAcquireShared(int arg) {
                     return;
                 }
             }
-            if (shouldParkAfterFailedAcquire(p, node) &&
-                parkAndCheckInterrupt())
+            if (shouldParkAfterFailedAcquire(p, node) && parkAndCheckInterrupt())
                 interrupted = true;
         }
     } finally {

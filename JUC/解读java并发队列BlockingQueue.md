@@ -141,7 +141,7 @@ private final ReentrantLock putLock = new ReentrantLock();
 private final Condition notFull = putLock.newCondition();
 ```
 
-这里用了两个锁，两个 Condition，简单介绍如下：
+这里用了**两个 lock，两个 Condition**，简单介绍如下：
 
 **takeLock 和 notEmpty 怎么搭配：**如果要获取（take）一个元素，需要获取 takeLock 锁，但是获取了锁还不够，如果队列此时为空，还需要队列不为空（notEmpty）这个条件（Condition）。
 
@@ -157,7 +157,8 @@ private final Condition notFull = putLock.newCondition();
 
 ```java
 public LinkedBlockingQueue(int capacity) {
-    if (capacity <= 0) throw new IllegalArgumentException();
+    if (capacity <= 0) 
+      	throw new IllegalArgumentException();
     this.capacity = capacity;
     last = head = new Node<E>(null);
 }
@@ -282,11 +283,11 @@ private void signalNotFull() {
 
 ## BlockingQueue 实现之 SynchronousQueue
 
-它是一个特殊的队列，它的名字其实就蕴含了它的特征 - - 同步的队列。为什么说是同步的呢？这里说的并不是多线程的并发问题，而是因为当一个线程往队列中写入一个元素时，写入操作不会立即返回，需要等待另一个线程来将这个元素拿走；同理，当一个读线程做读操作的时候，同样需要一个相匹配的写线程的写操作。这里的 Synchronous 指的就是读线程和写线程需要同步，一个读线程匹配一个写线程。
+它是一个特殊的队列，它的名字其实就蕴含了它的特征 - - 同步的队列。为什么说是同步的呢？这里说的并不是多线程的并发问题，**而是因为当一个线程往队列中写入一个元素时，写入操作不会立即返回，需要等待另一个线程来将这个元素拿走；同理，当一个读线程做读操作的时候，同样需要一个相匹配的写线程的写操作。这里的 Synchronous 指的就是读线程和写线程需要同步，一个读线程匹配一个写线程**。
 
 我们比较少使用到 SynchronousQueue 这个类，不过它在线程池的实现类 ThreadPoolExecutor 中得到了应用，感兴趣的读者可以在看完这个后去看看相应的使用。
 
-虽然上面我说了队列，但是 SynchronousQueue 的队列其实是虚的，其不提供任何空间（一个都没有）来存储元素。数据必须从某个写线程交给某个读线程，而不是写到某个队列中等待被消费。
+虽然上面我说了队列，但是 **SynchronousQueue 的队列其实是虚的，其不提供任何空间（一个都没有）来存储元素。数据必须从某个写线程交给某个读线程，而不是写到某个队列中等待被消费**。
 
 你不能在 SynchronousQueue 中使用 peek 方法（在这里这个方法直接返回 null），peek 方法的语义是只读取不移除，显然，这个方法的语义是不符合 SynchronousQueue 的特征的。SynchronousQueue 也不能被迭代，因为根本就没有元素可以拿来迭代的。虽然 SynchronousQueue 间接地实现了 Collection 接口，但是如果你将其当做 Collection 来用的话，那么集合是空的。当然，这个类也是不允许传递 null 值的（并发包中的容器类好像都不支持插入 null 值，因为 null 值往往用作其他用途，比如用于方法的返回值代表操作失败）。
 
@@ -321,7 +322,8 @@ Transferer 有两个内部实现类，是因为构造 SynchronousQueue 的时候
 ```java
 // 写入值
 public void put(E o) throws InterruptedException {
-    if (o == null) throw new NullPointerException();
+    if (o == null) 
+      	throw new NullPointerException();
     if (transferer.transfer(o, false, 0) == null) { // 1
         Thread.interrupted();
         throw new InterruptedException();
@@ -341,18 +343,18 @@ public E take() throws InterruptedException {
 
 我们来看看 transfer 的设计思路，其基本算法如下：
 
-1. 当调用这个方法时，如果队列是空的，或者队列中的节点和当前的线程操作类型一致（如当前操作是 put 操作，而队列中的元素也都是写线程）。这种情况下，将当前线程加入到等待队列即可。
-2. 如果队列中有等待节点，而且与当前操作可以匹配（如队列中都是读操作线程，当前线程是写操作线程，反之亦然）。这种情况下，匹配等待队列的队头，出队，返回相应数据。
+1. 当调用这个方法时，如果队列是空的，或者队列中的节点和当前的线程操作类型一致（**如当前操作是 put 操作，而队列中的元素也都是写线程），这种情况下，将当前线程加入到等待队列即可**。
+2. 如果队列中有等待节点，而且与当前操作可以匹配（**如队列中都是读操作线程，当前线程是写操作线程**，反之亦然）。这种情况下，**匹配等待队列的队头，出队，返回相应数据**。
 
 其实这里有个隐含的条件被满足了，队列如果不为空，肯定都是同种类型的节点，要么都是读操作，要么都是写操作。这个就要看到底是读线程积压了，还是写线程积压了。
 
-我们可以假设出一个男女配对的场景：一个男的过来，如果一个人都没有，那么他需要等待；如果发现有一堆男的在等待，那么他需要排到队列后面；如果发现是一堆女的在排队，那么他直接牵走队头的那个女的。
+我们可以假设出一个男女配对的场景：**一个男的过来，如果一个人都没有，那么他需要等待；如果发现有一堆男的在等待，那么他需要排到队列后面；如果发现是一堆女的在排队，那么他直接牵走队头的那个女的**。
 
 既然这里说到了等待队列，我们先看看其实现，也就是 QNode:
 
 ```java
 static final class QNode {
-    volatile QNode next;          // 可以看出来，等待队列是单向链表
+    volatile QNode next;          // 可以看出来，同步队列是单向链表
     volatile Object item;         // CAS'ed to or from null
     volatile Thread waiter;       // 将线程对象保存在这里，用于挂起和唤醒
     final boolean isData;         // 用于判断是写线程节点(isData == true)，还是读线程节点
@@ -365,6 +367,8 @@ static final class QNode {
 ```
 
 相信说了这么多以后，我们再来看 transfer 方法的代码就轻松多了。
+
+有个操作不理解：将当前节点中的 item 属性设置为结点本身就是说明取消了当前节点！！（笔记）
 
 ```java
 /**
@@ -424,19 +428,25 @@ Object transfer(Object e, boolean timed, long nanos) {
         // 这里的 else 分支就是上面说的第二种情况，有相应的读或写相匹配的情况
         } else {                            // complementary-mode
             QNode m = h.next;               // node to fulfill
+            // 1.队列结构发生变化；2.队列为空； -- 此时继续循环
             if (t != tail || m == null || h != head)
                 continue;                   // inconsistent read
 
+            // 1、isData(true 写) == (x!=null 写)即同类型操作，反之亦然
+            // 2、null == null 的情况吧？说明 m 取消了等待
+            // 3、cas 失败(把 m 的item字段赋值为 e)
             Object x = m.item;
             if (isData == (x != null) ||    // m already fulfilled
                 x == m ||                   // m cancelled
-                !m.casItem(x, e)) {         // lost CAS
+                !m.casItem(x, e)) 			// lost CAS
+            {
+                // 把 m 设置为头新的结点
                 advanceHead(h, m);          // dequeue and retry
                 continue;
             }
-
+			// 把 m 设置为头新的结点
             advanceHead(h, m);              // successfully fulfilled
-            LockSupport.unpark(m.waiter);
+            LockSupport.unpark(m.waiter);   // 唤醒线程
             return (x != null) ? x : e;
         }
     }
@@ -451,7 +461,6 @@ void advanceTail(QNode t, QNode nt) {
 ```java
 // 自旋或阻塞，直到满足条件，这个方法返回
 Object awaitFulfill(QNode s, Object e, boolean timed, long nanos) {
-
     long lastTime = timed ? System.nanoTime() : 0;
     Thread w = Thread.currentThread();
     // 判断需要自旋的次数，
@@ -567,8 +576,7 @@ public PriorityBlockingQueue(int initialCapacity) {
     this(initialCapacity, null);
 }
 // 指定比较器
-public PriorityBlockingQueue(int initialCapacity,
-                             Comparator<? super E> comparator) {
+public PriorityBlockingQueue(int initialCapacity, Comparator<? super E> comparator) {
     if (initialCapacity < 1)
         throw new IllegalArgumentException();
     this.lock = new ReentrantLock();
@@ -580,7 +588,6 @@ public PriorityBlockingQueue(int initialCapacity,
 public PriorityBlockingQueue(Collection<? extends E> c) {
     this.lock = new ReentrantLock();
     this.notEmpty = lock.newCondition();
-    // 
     boolean heapify = true; // true if not known to be in heap order
     boolean screen = true;  // true if must screen for nulls
     if (c instanceof SortedSet<?>) {
@@ -768,8 +775,7 @@ dequeue 方法返回队头，并调整二叉堆的树，调用这个方法必须
 废话不多说，出队是非常简单的，因为队头就是最小的元素，对应的是数组的第一个元素。难点是队头出队后，需要调整树。
 
 ```java
-private static <T> void siftDownComparable(int k, T x, Object[] array,
-                                           int n) {
+private static <T> void siftDownComparable(int k, T x, Object[] array, int n) {
     if (n > 0) {
         Comparable<? super T> key = (Comparable<? super T>)x;
         // 这里得到的 half 肯定是非叶节点
@@ -784,8 +790,7 @@ private static <T> void siftDownComparable(int k, T x, Object[] array,
             int right = child + 1;  // right = 2
             // 如果右子节点存在，而且比左子节点小
             // 此时 array[right] = 20，所以条件不满足
-            if (right < n &&
-                ((Comparable<? super T>) c).compareTo((T) array[right]) > 0)
+            if (right < n && ((Comparable<? super T>) c).compareTo((T) array[right]) > 0)
                 c = array[child = right];
             // key = 17, c = 12，所以条件不满足
             if (key.compareTo((T) c) <= 0)

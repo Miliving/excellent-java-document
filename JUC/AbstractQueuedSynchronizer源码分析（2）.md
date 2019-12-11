@@ -181,7 +181,7 @@ class BoundedBuffer {
 
 > 1、我们可以看到，在使用 condition 时，必须先持有相应的锁。这个和 Object 类中的方法有相似的语义，需要先**持有某个对象的监视器锁**才可以执行 wait(), notify() 或 notifyAll() 方法。
 >
-> 2、ArrayBlockingQueue 采用这种方式实现了生产者-消费者，所以请只把这个例子当做学习例子，实际生产中可以直接使用 ArrayBlockingQueue
+> 2、**ArrayBlockingQueue 采用这种方式实现了生产者-消费者**，所以请只把这个例子当做学习例子，实际生产中可以直接使用 ArrayBlockingQueue
 
 我们常用 obj.wait()，obj.notify() 或 obj.notifyAll() 来实现相似的功能，但是，它们是基于对象的监视器锁的。需要深入了解这几个方法的读者，可以参考我的另一篇文章《[深入分析 java 8 编程语言规范：Threads and Locks](http://hongjiev.github.io/2017/07/05/Threads-And-Locks-md/)》。而这里说的 Condition 是基于 ReentrantLock 实现的，而 ReentrantLock 是依赖于 AbstractQueuedSynchronizer 实现的。
 
@@ -278,7 +278,7 @@ public final void await() throws InterruptedException {
 
 其实，我大体上也把整个 await 过程说得十之八九了，下面我们分步把上面的几个点用源码说清楚。
 
-###  1. 将节点加入到条件队列移除取消节点
+###  1. 将节点加入到条件队列，移除取消节点
 
 addConditionWaiter() 是将当前节点加入到条件队列，看图我们知道，这种条件队列内的操作是线程安全的。
 

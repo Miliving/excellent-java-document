@@ -114,12 +114,10 @@ class SerialExecutor implements Executor {
     final Executor executor;
     // 当前正在执行的任务
     Runnable active;
-  
     // 初始化的时候，指定执行器
     SerialExecutor(Executor executor) {
         this.executor = executor;
     }
- 
     // 添加任务到线程池: 将任务添加到任务队列，scheduleNext 触发执行器去任务队列取任务
     public synchronized void execute(final Runnable r) {
         tasks.offer(new Runnable() {
@@ -202,11 +200,11 @@ public interface ExecutorService extends Executor {
                                   long timeout, TimeUnit unit)
             throws InterruptedException;
 
-    // 只有其中的一个任务结束了，就可以返回，返回执行完的那个任务的结果
+    // 只要其中的一个任务结束了，就可以返回，返回执行完的那个任务的结果
     <T> T invokeAny(Collection<? extends Callable<T>> tasks)
             throws InterruptedException, ExecutionException;
   
-    // 同上一个方法，只有其中的一个任务结束了，就可以返回，返回执行完的那个任务的结果，
+    // 同上一个方法，只要其中的一个任务结束了，就可以返回，返回执行完的那个任务的结果，
     // 不过这个带超时，超过指定的时间，抛出 TimeoutException 异常
     <T> T invokeAny(Collection<? extends Callable<T>> tasks,
                     long timeout, TimeUnit unit)
@@ -236,7 +234,7 @@ FutureTask 通过 RunnableFuture 间接实现了 Runnable 接口，
 然后调用 executor.execute(Runnable command) 将其提交给线程池
 ```
 
-我们知道，Runnable 的 void run() 方法是没有返回值的，所以，通常，如果我们需要的话，会在 submit 中指定第二个参数作为返回值：
+我们知道，Runnable 的 void run() 方法是没有返回值的，所以，通常如果我们需要的话，会在 submit 中指定第二个参数作为返回值：
 
 ```java
 <T> Future<T> submit(Runnable task, T result);
@@ -321,14 +319,13 @@ public abstract class AbstractExecutorService implements ExecutorService {
         int ntasks = tasks.size();
         if (ntasks == 0)
             throw new IllegalArgumentException();
-        // 
+        // 用于收集任务tasks的执行结果
         List<Future<T>> futures= new ArrayList<Future<T>>(ntasks);
       
         // ExecutorCompletionService 不是一个真正的执行器，参数 this 才是真正的执行器
         // 它对执行器进行了包装，每个任务结束后，将结果保存到内部的一个 completionQueue 队列中
         // 这也是为什么这个类的名字里面有个 Completion 的原因吧。
-        ExecutorCompletionService<T> ecs =
-            new ExecutorCompletionService<T>(this);
+        ExecutorCompletionService<T> ecs = new ExecutorCompletionService<T>(this);
         try {
             // 用于保存异常信息，此方法如果没有得到任何有效的结果，那么我们可以抛出最后得到的一个异常
             ExecutionException ee = null;
@@ -390,8 +387,6 @@ public abstract class AbstractExecutorService implements ExecutorService {
                        但是 f.get() 抛出异常，那么从 active == 0 分支出去(感谢 newmicro 提出)
                          // 当然，这个需要看下面的 if 分支。
                  */
-              
-              
               
                 // 有任务结束了
                 if (f != null) {
@@ -723,14 +718,12 @@ private static boolean isRunning(int c) {
 
 上面的几个记住核心的就可以了，尤其第一个和第二个。
 
-另外，我们还要看看一个内部类 Worker，因为 Doug Lea 把线程池中的线程包装成了一个个 Worker，翻译成工人，就是线程池中做任务的线程。所以到这里，我们知道**任务是 Runnable（内部变量名叫 task 或 command），线程是 Worker**。
+另外，我们还要看看一个内部类 Worker，因为 Doug Lea **把线程池中的线程包装成了一个个 Worker**，翻译成工人，就是线程池中做任务的线程。所以到这里，我们知道**任务是 Runnable（内部变量名叫 task 或 command），线程是 Worker**。
 
 Worker 这里又用到了抽象类 AbstractQueuedSynchronizer。题外话，AQS 在并发中真的是到处出现，而且非常容易使用，写少量的代码就能实现自己需要的同步方式（对 AQS 源码感兴趣的读者请参看我之前写的几篇文章）。
 
 ```java
-private final class Worker
-    extends AbstractQueuedSynchronizer
-    implements Runnable
+private final class Worker extends AbstractQueuedSynchronizer implements Runnable
 {
     private static final long serialVersionUID = 6138294804551838833L;
 
@@ -832,9 +825,10 @@ private boolean addWorker(Runnable firstTask, boolean core) {
         // 2. firstTask != null
         // 3. workQueue.isEmpty()
         // 简单分析下：
-        // 还是状态控制的问题，当线程池处于 SHUTDOWN 的时候，不允许提交任务，但是已有的任务继续执行
-        // 当状态大于 SHUTDOWN 时，不允许提交任务，且中断正在执行的任务
-        // 多说一句：如果线程池处于 SHUTDOWN，但是 firstTask 为 null，且 workQueue 非空，那么是允许创建 worker 的
+        // 还是状态控制的问题：
+        // 1.当线程池处于 SHUTDOWN 的时候，不允许提交任务，但是已有的任务继续执行
+        // 2.当状态大于 SHUTDOWN 时，不允许提交任务，且中断正在执行的任务
+        // 3.多说一句：如果线程池处于 SHUTDOWN，但是 firstTask 为 null，且 workQueue 非空，那么是允许创建 worker 的
         // 这是因为 SHUTDOWN 的语义：不允许提交新的任务，但是要把已经进入到 workQueue 的任务执行完，所以在满足条件的基础上，是允许创建新的 Worker 的
         if (rs >= SHUTDOWN &&
             ! (rs == SHUTDOWN &&
@@ -889,8 +883,7 @@ private boolean addWorker(Runnable firstTask, boolean core) {
 
                 // 小于 SHUTTDOWN 那就是 RUNNING，这个自不必说，是最正常的情况
                 // 如果等于 SHUTDOWN，前面说了，不接受新的任务，但是会继续执行等待队列中的任务
-                if (rs < SHUTDOWN ||
-                    (rs == SHUTDOWN && firstTask == null)) {
+                if (rs < SHUTDOWN || (rs == SHUTDOWN && firstTask == null)) {
                     // worker 里面的 thread 可不能是已经启动的
                     if (t.isAlive())
                         throw new IllegalThreadStateException();
@@ -1019,8 +1012,7 @@ final void runWorker(Worker w) {
 
 ```java
 // 此方法有三种可能：
-// 1. 阻塞直到获取到任务返回。我们知道，默认 corePoolSize 之内的线程是不会被回收的，
-//      它们会一直等待任务
+// 1. 阻塞直到获取到任务返回。我们知道，默认 corePoolSize 之内的线程是不会被回收的，它们会一直等待任务
 // 2. 超时退出。keepAliveTime 起作用的时候，也就是如果这么多时间内都没有任务，那么应该执行关闭
 // 3. 如果发生了以下条件，此方法必须返回 null:
 //    - 池中有大于 maximumPoolSize 个 workers 存在(通过调用 setMaximumPoolSize 进行设置)

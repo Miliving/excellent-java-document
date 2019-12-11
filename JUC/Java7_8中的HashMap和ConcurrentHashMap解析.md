@@ -11,7 +11,7 @@ categories:
 
 阅读建议：四节基本上可以进行独立阅读，建议初学者可按照 Java7 HashMap -> Java7 ConcurrentHashMap -> Java8 HashMap -> Java8 ConcurrentHashMap 顺序进行阅读，可适当降低阅读门槛。
 
-阅读前提：本文分析的是源码，所以至少读者要熟悉它们的接口使用，同时，对于并发，读者至少要知道 CAS、ReentrantLock、UNSAFE 操作这几个基本的知识，文中不会对这些知识进行介绍。Java8 用到了红黑树，不过本文不会进行展开，感兴趣的读者请自行查找相关资料。
+阅读前提：本文分析的是源码，所以至少读者要熟悉它们的接口使用，同时，对于并发，读者至少要知道 CAS、ReentrantLock、UNSAFE 操作这几个基本的知识，文中不会对这些知识进行介绍。Java8 用到了**红黑树**，不过本文不会进行展开，感兴趣的读者请自行查找相关资料。
 
 <!-- toc -->
 
@@ -27,7 +27,7 @@ HashMap 是最简单的，一来我们非常熟悉，二来就是它不支持并
 
 大方向上，HashMap 里面是一个**数组**，然后数组中每个元素是一个**单向链表**。
 
-上图中，每个绿色的实体是嵌套类 Entry 的实例，Entry 包含四个属性：key, value, hash 值和用于单向链表的 next。
+上图中，每个绿色的实体是内部类 Entry 的实例，Entry 包含四个属性：key, value, hash 值和用于单向链表的 next。
 
 capacity：当前数组容量，始终保持 2^n，可以扩容，扩容后数组大小为当前的 2 倍。
 
@@ -208,7 +208,7 @@ ConcurrentHashMap 和 HashMap 思路是差不多的，但是因为它支持并�
 
 ![3](https://www.javadoop.com/blogimages/map/3.png)
 
-**concurrencyLevel**：并行级别、并发数、Segment 数，怎么翻译不重要，理解它。默认是 16，也就是说 ConcurrentHashMap 有 16 个 Segments，所以理论上，这个时候，最多可以同时支持 16 个线程并发写，只要它们的操作分别分布在不同的 Segment 上。这个值可以在初始化的时候设置为其他值，但是一旦初始化以后，它是不可以扩容的。
+**concurrencyLevel**：并行级别、并发数、Segment 数，怎么翻译不重要，理解它。**默认是 16**，也就是说 ConcurrentHashMap 有 16 个 **Segments**，所以理论上，这个时候，最多可以同时支持 16 个线程并发写，只要它们的操作分别分布在不同的 Segment 上。这个值可以在初始化的时候设置为其他值，**但是一旦初始化以后，它是不可以扩容的**。
 
 再具体到每个 Segment 内部，其实每个 Segment 很像之前介绍的 HashMap，不过它要保证线程安全，所以处理起来要麻烦些。
 
@@ -256,8 +256,9 @@ public ConcurrentHashMap(int initialCapacity,
     // 创建 Segment 数组，
     // 并创建数组的第一个元素 segment[0]
     Segment<K,V> s0 =
-        new Segment<K,V>(loadFactor, (int)(cap * loadFactor),
-                         (HashEntry<K,V>[])new HashEntry[cap]);
+        new Segment<K,V>( loadFactor, 
+                          (int)(cap * loadFactor),
+                          (HashEntry<K,V>[])new HashEntry[cap]);
     Segment<K,V>[] ss = (Segment<K,V>[])new Segment[ssize];
     // 往数组写入 segment[0]
     UNSAFE.putOrderedObject(ss, SBASE, s0); // ordered write of segments[0]
@@ -306,7 +307,7 @@ Segment 内部是由 **数组+链表** 组成的。
 ```java
 final V put(K key, int hash, V value, boolean onlyIfAbsent) {
     // 在往该 segment 写入前，需要先获取该 segment 的独占锁
-    //    先看主流程，后面还会具体介绍这部分内容
+    // 先看主流程，后面还会具体介绍这部分内容
     HashEntry<K,V> node = tryLock() ? null :
         scanAndLockForPut(key, hash, value);
     V oldValue;
@@ -391,13 +392,11 @@ private Segment<K,V> ensureSegment(int k) {
         
         // 初始化 segment[k] 内部的数组
         HashEntry<K,V>[] tab = (HashEntry<K,V>[])new HashEntry[cap];
-        if ((seg = (Segment<K,V>)UNSAFE.getObjectVolatile(ss, u))
-            == null) { // 再次检查一遍该槽是否被其他线程初始化了。
-          
+        // 再次检查一遍该槽是否被其他线程初始化了。  
+        if ((seg = (Segment<K,V>)UNSAFE.getObjectVolatile(ss, u))== null) { 
             Segment<K,V> s = new Segment<K,V>(lf, threshold, tab);
             // 使用 while 循环，内部用 CAS，当前线程成功设值或其他线程成功设值后，退出
-            while ((seg = (Segment<K,V>)UNSAFE.getObjectVolatile(ss, u))
-                   == null) {
+            while ((seg = (Segment<K,V>)UNSAFE.getObjectVolatile(ss, u)) == null) {
                 if (UNSAFE.compareAndSwapObject(ss, u, null, seg = s))
                     break;
             }
@@ -624,8 +623,7 @@ public V put(K key, V value) {
 
 // 第三个参数 onlyIfAbsent 如果是 true，那么只有在不存在该 key 时才会进行 put 操作
 // 第四个参数 evict 我们这里不关心
-final V putVal(int hash, K key, V value, boolean onlyIfAbsent,
-               boolean evict) {
+final V putVal(int hash, K key, V value, boolean onlyIfAbsent, boolean evict) {
     Node<K,V>[] tab; Node<K,V> p; int n, i;
     // 第一次 put 值的时候，会触发下面的 resize()，类似 java7 的第一次 put 也要初始化数组长度
     // 第一次 resize 和后续的扩容有些不一样，因为这次是数组从 null 初始化到默认的 16 或自定义的初始容量
@@ -687,7 +685,7 @@ final V putVal(int hash, K key, V value, boolean onlyIfAbsent,
 
 #### 数组扩容
 
-resize() 方法用于**初始化数组**或**数组扩容**，每次扩容后，容量为原来的 2 倍，并进行数据迁移。
+resize() 方法用于**初始化数组**或**数组扩容**，每次扩容后，容量为原来的 2 倍，**并进行数据迁移**。
 
 ```java
 final Node<K,V>[] resize() {
@@ -979,7 +977,7 @@ private final Node<K,V>[] initTable() {
                 if ((tab = table) == null || tab.length == 0) {
                     // DEFAULT_CAPACITY 默认初始容量是 16
                     int n = (sc > 0) ? sc : DEFAULT_CAPACITY;
-					// 初始化数组，长度为 16 或初始化时提供的长度
+				  // 初始化数组，长度为 16 或初始化时提供的长度
                     Node<K,V>[] nt = (Node<K,V>[])new Node<?,?>[n];
                     // 将这个数组赋值给 table，table 是 volatile 的
                     table = tab = nt;
@@ -1122,7 +1120,7 @@ private final void transfer(Node<K,V>[] tab, Node<K,V>[] nextTab) {
     
     // stride 在单核下直接等于 n，多核模式下为 (n>>>3)/NCPU，最小值是 16
     // stride 可以理解为”步长“，有 n 个位置是需要进行迁移的，
-    //   将这 n 个任务分为多个任务包，每个任务包有 stride 个任务
+    // 将这 n 个任务分为多个任务包，每个任务包有 stride 个任务
     if ((stride = (NCPU > 1) ? (n >>> 3) / NCPU : n) < MIN_TRANSFER_STRIDE)
         stride = MIN_TRANSFER_STRIDE; // subdivide range
 
@@ -1152,7 +1150,6 @@ private final void transfer(Node<K,V>[] tab, Node<K,V>[] nextTab) {
     //    就会将位置 i 处设置为这个 ForwardingNode，用来告诉其他线程该位置已经处理过了
     //    所以它其实相当于是一个标志。
     ForwardingNode<K,V> fwd = new ForwardingNode<K,V>(nextTab);
-    
 
     // advance 指的是做完了一个位置的迁移工作，可以准备做下一个位置的了
     boolean advance = true;
@@ -1160,7 +1157,6 @@ private final void transfer(Node<K,V>[] tab, Node<K,V>[] nextTab) {
     
     /*
      * 下面这个 for 循环，最难理解的在前面，而要看懂它们，应该先看懂后面的，然后再倒回来看
-     * 
      */
     
     // i 是位置索引，bound 是边界，注意是从后往前
